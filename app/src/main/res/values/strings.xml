@@ -1,0 +1,3 @@
+<resources>
+    <string name="service_desc">Shows a floating mic bubble whenever you\'re typing. Tap to dictate, hold to push-to-talk. Your voice is transcribed by Groq and typed into the focused text field.</string>
+</resources>
