@@ -27,6 +27,7 @@ class MainActivity : Activity() {
     private lateinit var enableBtn: Button
     private lateinit var micBtn: Button
     private val fields = mutableMapOf<String, EditText>()
+    private val prompts = mutableMapOf<String, Pair<EditText, String>>()
     private lateinit var cleanup: Switch
 
     private val d by lazy { resources.displayMetrics.density }
@@ -79,6 +80,8 @@ class MainActivity : Activity() {
         col.addView(field(Cfg.DICT, "Dictionary (names, jargon; comma separated)", "Groq, Kotlin, Kubernetes", multi = true))
         col.addView(field(Cfg.STT, "Transcription model", Cfg.DEF_STT))
         col.addView(field(Cfg.LLM, "Cleanup / assistant model", Cfg.DEF_LLM))
+        col.addView(promptField(Cfg.CLEANUP_PROMPT, "Cleanup prompt (dictionary is appended automatically)", Prompts.CLEANUP))
+        col.addView(promptField(Cfg.ASSISTANT_PROMPT, "Assistant prompt ({name} = assistant name)", Prompts.ASSISTANT))
 
         col.addView(TextView(this).apply {
             text = "Try it"; textSize = 18f; typeface = Typeface.DEFAULT_BOLD; setPadding(0, dp(24), 0, dp(4))
@@ -114,6 +117,27 @@ class MainActivity : Activity() {
             })
         }
 
+    /** Multiline prompt editor prefilled with the default; saved only when it differs from it. */
+    private fun promptField(key: String, label: String, default: String) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, dp(12), 0, 0)
+        addView(TextView(context).apply { text = label; textSize = 13f; alpha = 0.7f })
+        val edit = EditText(context).apply {
+            setText(cfg.p.getString(key, "")!!.ifBlank { default })
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_MULTI_LINE
+            textSize = 13f
+            typeface = Typeface.MONOSPACE
+            setOnFocusChangeListener { _, has -> if (!has) save() }
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT)
+        }
+        prompts[key] = edit to default
+        addView(edit)
+        addView(Button(context).apply {
+            text = "Reset to default"
+            setOnClickListener { edit.setText(default); save() }
+        })
+    }
+
     override fun onResume() {
         super.onResume()
         val am = getSystemService(ACCESSIBILITY_SERVICE) as AccessibilityManager
@@ -136,6 +160,10 @@ class MainActivity : Activity() {
         cfg.p.edit().apply {
             fields.forEach { (k, v) -> putString(k, v.text.toString().trim()) }
             putBoolean(Cfg.CLEANUP, cleanup.isChecked)
+            prompts.forEach { (k, v) ->
+                val text = v.first.text.toString().trim()
+                if (text.isEmpty() || text == v.second) remove(k) else putString(k, text)
+            }
         }.apply()
     }
 }

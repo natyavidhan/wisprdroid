@@ -13,6 +13,8 @@ class Cfg(ctx: Context) {
     val sttModel get() = p.getString(STT, DEF_STT)!!.ifBlank { DEF_STT }
     val llmModel get() = p.getString(LLM, DEF_LLM)!!.ifBlank { DEF_LLM }
     val dictionary get() = p.getString(DICT, "")!!.split(',', '\n').map { it.trim() }.filter { it.isNotEmpty() }
+    val cleanupPrompt get() = p.getString(CLEANUP_PROMPT, "")!!.ifBlank { Prompts.CLEANUP }
+    val assistantPrompt get() = p.getString(ASSISTANT_PROMPT, "")!!.ifBlank { Prompts.ASSISTANT }
     var bubbleOffset
         get() = p.getInt(OFFSET, Int.MIN_VALUE)
         set(v) = p.edit().putInt(OFFSET, v).apply()
@@ -26,6 +28,8 @@ class Cfg(ctx: Context) {
         const val LLM = "llm"
         const val DICT = "dict"
         const val OFFSET = "offset"
+        const val CLEANUP_PROMPT = "cleanup_prompt"
+        const val ASSISTANT_PROMPT = "assistant_prompt"
         const val DEF_AGENT = "Jarvis"
         const val DEF_STT = "whisper-large-v3-turbo"
         const val DEF_LLM = "llama-3.3-70b-versatile"

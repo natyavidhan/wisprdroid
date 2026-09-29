@@ -271,9 +271,9 @@ class FlowService : AccessibilityService() {
         if (raw.isBlank() || raw.lowercase().trim('.', '!', ' ') in HALLUCINATIONS) return ""
         val command = wakeCommand(raw, name)
         return when {
-            command != null -> Groq.chat(key, cfg.llmModel, Prompts.assistant(name),
+            command != null -> Groq.chat(key, cfg.llmModel, Prompts.assistant(cfg.assistantPrompt, name),
                 Prompts.assistantInput(command, app, field, selected))
-            cfg.cleanup -> Groq.chat(key, cfg.llmModel, Prompts.cleanup(cfg.dictionary),
+            cfg.cleanup -> Groq.chat(key, cfg.llmModel, Prompts.cleanup(cfg.cleanupPrompt, cfg.dictionary),
                 "<transcript>$raw</transcript>").removeSurrounding("<transcript>", "</transcript>").trim()
             else -> raw
         }

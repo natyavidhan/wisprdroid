@@ -12,6 +12,7 @@ Voice dictation for Android, modeled on [Wispr Flow](https://wisprflow.ai) and [
 - Optional LLM cleanup: removes fillers, applies self-corrections, fixes punctuation
 - Assistant mode: prefix with the agent name ("Jarvis, ...") to run a command. Field text and selection are sent as context; with a selection, the output replaces it
 - Custom dictionary, passed to Whisper as a prompt and to the LLM as preferred spellings
+- Editable cleanup and assistant system prompts (`{name}` expands to the assistant name)
 - Works alongside any keyboard
 
 ## How it works
@@ -49,6 +50,7 @@ Release builds are minified with R8 and signed with the debug key.
 | Assistant name | `Jarvis` |
 | Language | auto |
 | AI cleanup | on |
+| Cleanup / assistant prompts | built-in, editable in settings, blank or unchanged = default |
 
 ## Source
 
