@@ -14,6 +14,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
+import android.util.Log
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.MotionEvent
@@ -46,6 +47,8 @@ class FlowService : AccessibilityService() {
     private val audio by lazy { File(cacheDir, "rec.m4a") }
     private var target: AccessibilityNodeInfo? = null
     private var imeTop: Int? = null
+    private var lastEditable: AccessibilityNodeInfo? = null
+    private var pending = false
 
     override fun onServiceConnected() {
         cfg = Cfg(this)
@@ -77,19 +80,46 @@ class FlowService : AccessibilityService() {
     // ---------------------------------------------------------------- visibility
 
     override fun onAccessibilityEvent(e: AccessibilityEvent?) {
-        main.removeCallbacks(check)
-        main.postDelayed(check, 80)
+        if (e == null) return
+        when (e.eventType) {
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
+                e.source?.takeIf { it.isEditable }?.let { lastEditable = it }
+                // The keyboard usually slides in after focus lands; re-check once it has settled.
+                main.postDelayed(check, 450)
+                main.postDelayed(check, 1100)
+            }
+        }
+        // Throttle (not debounce) so a constant stream of content changes can't starve the check.
+        if (!pending) {
+            pending = true
+            main.postDelayed(check, 100)
+        }
     }
 
     private val check = Runnable {
+        pending = false
         if (!::bubble.isInitialized) return@Runnable
         val ime = windows.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }
         imeTop = ime?.let { Rect().also(it::getBoundsInScreen).top }
         if (bubble.state != State.IDLE) return@Runnable
-        val f = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-        val show = ime != null && f != null && f.isEditable && !f.isPassword
+        val f = focusedEditable()
+        val show = ime != null && f != null && !f.isPassword
+        if (BuildConfig.DEBUG || Log.isLoggable(TAG, Log.DEBUG))
+            Log.d(TAG, "check ime=${ime != null} focus=${f?.packageName}/${f?.className} show=$show")
         bubble.visibility = if (show) View.VISIBLE else View.GONE
         if (show) place()
+    }
+
+    /** Focused editable node, trying the global lookup, then each app window, then the last one we saw. */
+    private fun focusedEditable(): AccessibilityNodeInfo? {
+        findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }?.let { return it }
+        for (w in windows) {
+            if (w.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD) continue
+            w.root?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }?.let { return it }
+        }
+        return lastEditable?.takeIf { it.refresh() && it.isEditable && it.isFocused }
     }
 
     private fun place() {
@@ -164,7 +194,7 @@ class FlowService : AccessibilityService() {
         if (cfg.key.isBlank()) return fail("Add your Groq API key in the Whispr app")
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
             return fail("Grant microphone access in the Whispr app")
-        target = findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        target = focusedEditable()
         val r = if (Build.VERSION.SDK_INT >= 31) MediaRecorder(this) else @Suppress("DEPRECATION") MediaRecorder()
         try {
             r.setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
@@ -259,8 +289,7 @@ class FlowService : AccessibilityService() {
     // ---------------------------------------------------------------- insertion
 
     private fun liveTarget(): AccessibilityNodeInfo? =
-        findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }
-            ?: target?.takeIf { it.refresh() && it.isEditable }
+        focusedEditable() ?: target?.takeIf { it.refresh() && it.isEditable }
 
     private fun fieldText(n: AccessibilityNodeInfo): String =
         if (n.isShowingHintText) "" else n.text?.toString().orEmpty()
@@ -311,6 +340,7 @@ class FlowService : AccessibilityService() {
     }
 
     companion object {
+        private const val TAG = "wisprdroid"
         /** Whisper's classic outputs on silence. */
         private val HALLUCINATIONS = setOf("thank you", "thanks for watching", "you", "bye", "thank you for watching")
     }
